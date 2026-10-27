@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Habit tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Noto+Sans+Gujarati:wght@400;600&display=swap">
+<style>
+:root{--bg:#F1F4F0;--sf:#FFFFFF;--ink:#16231F;--mu:#5B6B65;--ac:#3B4CCA;--oa:#FFFFFF;--dn:#17805D;--on:#FFFFFF;--ln:#D3DCD7;--bd:#B3261E;color-scheme:light;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1614;--sf:#17211E;--ink:#E7EEEA;--mu:#98A8A1;--ac:#9AA6FF;--oa:#0F1614;--dn:#3FBF92;--on:#08130F;--ln:#2A3833;--bd:#FF8A80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0F1614;--sf:#17211E;--ink:#E7EEEA;--mu:#98A8A1;--ac:#9AA6FF;--oa:#0F1614;--dn:#3FBF92;--on:#08130F;--ln:#2A3833;--bd:#FF8A80;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'Bricolage Grotesque','Noto Sans Gujarati',system-ui,sans-serif}
+main{max-width:600px;margin:0 auto;padding:28px 20px 48px}
+h1{margin:0;font-size:clamp(42px,13vw,68px);line-height:1;font-weight:800;letter-spacing:-.03em}
+.date{margin:6px 0 0;font-size:18px;color:var(--mu)}
+.prog{margin:26px 0 22px}
+.prog p{margin:0 0 8px;font-weight:600}
+.bar{height:6px;border-radius:3px;background:var(--ln);overflow:hidden}
+.fill{height:100%;width:0;background:var(--dn);transition:width .25s}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.h{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:14px;display:grid;grid-template-columns:56px 1fr auto;gap:12px 14px;align-items:center}
+.sym{position:relative;width:56px;height:56px;padding:0;border-radius:6px;border:1.5px solid var(--ink);background:transparent;color:var(--ink);font:700 22px 'Bricolage Grotesque','Noto Sans Gujarati',system-ui,sans-serif;cursor:pointer;display:grid;place-items:center;transition:background .15s,color .15s}
+.sym.on{background:var(--dn);border-color:var(--dn);color:var(--on)}
+.sym .n{position:absolute;top:4px;left:6px;font-size:11px;font-weight:600;line-height:1}
+.name{font-weight:600;font-size:17px;overflow-wrap:anywhere}
+.sub{font-size:14px;color:var(--mu)}
+.rm{min-height:36px;padding:6px 8px;border:0;border-radius:6px;background:none;color:var(--mu);font:inherit;font-size:14px;cursor:pointer}
+.rm.sure{color:var(--bd);font-weight:600}
+.week{grid-column:1/-1;display:flex;justify-content:space-between}
+.d{width:32px;height:32px;padding:0;border-radius:50%;border:1.5px solid var(--ln);background:none;color:var(--mu);font:600 12px 'Bricolage Grotesque',system-ui,sans-serif;cursor:pointer}
+.d.today{border-color:var(--ink)}
+.d.on{background:var(--dn);border-color:var(--dn);color:var(--on)}
+.empty{margin:0 0 4px;color:var(--mu)}
+.add{display:flex;gap:8px;margin-top:28px}
+.add input{flex:1;min-width:0;height:48px;padding:0 14px;border:1.5px solid var(--ln);border-radius:8px;background:var(--sf);color:var(--ink);font:inherit}
+.add button{height:48px;padding:0 20px;border:0;border-radius:8px;background:var(--ac);color:var(--oa);font:600 16px inherit;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{padding:8px 14px;border:1px solid var(--ln);border-radius:999px;background:var(--sf);color:var(--ink);font:inherit;font-size:15px;cursor:pointer}
+.foot{margin:32px 0 0;font-size:13px;color:var(--mu)}
+:focus-visible{outline:2.5px solid var(--ac);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <h1 id="dow"></h1>
+  <p class="date" id="dt"></p>
+  <div class="prog"><p id="prog"></p><div class="bar" aria-hidden="true"><div class="fill" id="fill"></div></div></div>
+  <p class="empty" id="empty" hidden>No habits yet. Type one below, or tap a suggestion.</p>
+  <ul id="list"></ul>
+  <div class="add">
+    <input id="inp" type="text" maxlength="40" placeholder="New habit, e.g. Revise chemistry" aria-label="New habit name" autocomplete="off">
+    <button id="addb" type="button">Add habit</button>
+  </div>
+  <div class="chips" id="chips" hidden></div>
+  <p class="foot">Habits are saved in this browser on this device.</p>
+</main>
+<script>
+var KEY='habits.v1',habits=[],pend=null,tm=null;
+try{habits=JSON.parse(localStorage.getItem(KEY))||[]}catch(e){habits=[]}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(habits))}catch(e){}}
+var $=function(s){return document.querySelector(s)};
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function pad(n){return String(n).padStart(2,'0')}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function addDays(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x}
+function streak(h){var s=new Set(h.done),d=new Date(),n=0;if(!s.has(ymd(d)))d=addDays(d,-1);while(s.has(ymd(d))){n++;d=addDays(d,-1)}return n}
+function sym(name){
+  var g=(window.Intl&&Intl.Segmenter)?Array.from(new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(name),function(x){return x.segment}):Array.from(name);
+  var c=Array.from(g.slice(0,2).join('').trim());
+  return (c[0]||'').toUpperCase()+c.slice(1).join('').toLowerCase();
+}
+function toggle(id,k,fk){
+  pend=null;
+  var h=habits.find(function(x){return x.id===id});if(!h)return;
+  var i=h.done.indexOf(k);if(i<0)h.done.push(k);else h.done.splice(i,1);
+  save();render(fk);
+}
+function add(name){
+  name=(name||'').trim().slice(0,40);if(!name)return;
+  habits.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:name,done:[]});
+  save();render();
+}
+function render(fk){
+  var now=new Date(),today=ymd(now);
+  $('#dow').textContent=now.toLocaleDateString(undefined,{weekday:'long'});
+  $('#dt').textContent=now.toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'});
+  var total=habits.length,done=habits.filter(function(h){return h.done.indexOf(today)>-1}).length;
+  $('#prog').textContent=!total?'Add your first habit to begin.':done===total?'All '+total+' done today.':done+' of '+total+' done today';
+  $('#fill').style.width=total?Math.round(done/total*100)+'%':'0%';
+  $('#empty').hidden=total>0;$('#chips').hidden=total>0;
+  var ul=$('#list');ul.textContent='';
+  habits.forEach(function(h){
+    var s=streak(h),isDone=h.done.indexOf(today)>-1,li=el('li','h');
+    var b=el('button','sym'+(isDone?' on':''),sym(h.name));
+    b.dataset.k='s'+h.id;b.setAttribute('aria-pressed',isDone);b.setAttribute('aria-label',h.name+', done today');
+    if(s)b.append(el('span','n',s));
+    b.onclick=function(){toggle(h.id,today,'s'+h.id)};
+    var m=el('div','meta');
+    m.append(el('div','name',h.name),el('div','sub',s?s+(s===1?' day':' days')+' in a row':'No streak yet'));
+    var r=el('button','rm'+(pend===h.id?' sure':''),pend===h.id?'Tap again to remove':'Remove');
+    r.dataset.k='r'+h.id;
+    r.onclick=function(){
+      if(pend===h.id){habits=habits.filter(function(x){return x.id!==h.id});pend=null;save();render()}
+      else{pend=h.id;clearTimeout(tm);tm=setTimeout(function(){pend=null;render()},3000);render('r'+h.id)}
+    };
+    var w=el('div','week');
+    for(var i=6;i>=0;i--){(function(i){
+      var d=addDays(now,-i),k=ymd(d),on=h.done.indexOf(k)>-1;
+      var x=el('button','d'+(on?' on':'')+(i===0?' today':''),'SMTWTFS'[d.getDay()]);
+      x.dataset.k='d'+h.id+k;x.setAttribute('aria-pressed',on);
+      x.setAttribute('aria-label',h.name+', '+d.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'short'}));
+      x.onclick=function(){toggle(h.id,k,'d'+h.id+k)};
+      w.append(x);
+    })(i)}
+    li.append(b,m,r,w);ul.append(li);
+  });
+  if(fk){var t=document.querySelector('[data-k="'+fk+'"]');if(t)t.focus()}
+}
+['Study for 2 hours','Drink 3 litres of water','Walk for 30 minutes','Read 10 pages','Sleep before 11 pm'].forEach(function(t){
+  var c=el('button','chip',t);c.type='button';c.onclick=function(){add(t)};$('#chips').append(c);
+});
+function submit(){var i=$('#inp');add(i.value);i.value='';i.focus()}
+$('#addb').onclick=submit;
+$('#inp').addEventListener('keydown',function(e){if(e.key==='Enter')submit()});
+document.addEventListener('visibilitychange',function(){if(!document.hidden)render()});
+render();
+</script>
+</body>
+</html>
